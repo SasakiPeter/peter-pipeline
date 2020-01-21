@@ -157,7 +157,7 @@ FIRST_LAYER = {
         ],
         'PREDICT_FORMAT': 'predict'
     },
-    'RandomForestRegressor_RF1': {
+    'RandomForestRegressor_RF-1': {
         'PREPROCESS': [],
         'CV': {
             'n_splits': 5,
@@ -182,7 +182,8 @@ FIRST_LAYER = {
 }
 
 SECOND_LAYER = {
-    'LinearRegression_STACKING1': {
+    'LinearRegression_STK1': {
+        'PREPROCESS': [],
         'CV': {
             'n_splits': 5,
             'seed': 10
@@ -199,7 +200,8 @@ SECOND_LAYER = {
         ],
         'PREDICT_FORMAT': 'predict'
     },
-    'Ridge_STACKING2': {
+    'Ridge_STK2': {
+        'PREPROCESS': [],
         'CV': {
             'n_splits': 5,
             'seed': 10

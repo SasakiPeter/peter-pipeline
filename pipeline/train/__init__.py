@@ -87,17 +87,8 @@ def get_eval_metric(name):
     return eval_metrics[name]
 
 
-def train():
-    folder_path = f'models/{settings.PROJECT_ID}'
-    provide_dir(folder_path)
-    cv_summary = pd.DataFrame()
-
-    X, y = load_train()
-    X_test, id_test = load_test()
-
-    first_layer = settings.FIRST_LAYER
-
-    for name, params in first_layer.items():
+def train_by_layer(layer, X, y, X_test, id_test, cv_summary):
+    for name, params in layer.items():
         if params['PREPROCESS']:
             preprocess = params['PREPROCESS']
             preprocess_funcs = [get_preprocess(name) for name in preprocess]
@@ -128,51 +119,44 @@ def train():
         cv_scores_path = f'models/{settings.PROJECT_ID}/{section_id}.csv'
         cv.scores.to_csv(cv_scores_path, encoding='utf-8')
         for metric in eval_metrics.keys():
-            cv_summary.loc[section_id, metric] = cv.scores.loc[metric, 'mean']
+            mean = cv.scores.loc[metric, 'mean']
+            cv_summary.loc[section_id, metric] = f'{mean:.5f}'
+    return cv_summary
 
-    # stacking layers
-    second_layer = settings.SECOND_LAYER
 
+def get_oof_by_layer(layer):
     X = pd.DataFrame()
     X_test = pd.DataFrame()
-
-    for i, (name, params) in enumerate(first_layer.items()):
+    for i, (name, params) in enumerate(layer.items()):
         algo_name, section_id = name.split('_')
-        model_path = f'models/{settings.PROJECT_ID}-{section_id}.pkl'
+        model_path = f'models/{settings.PROJECT_ID}/{section_id}.pkl'
         cv = CrossValidator()
         cv.load(model_path)
         X[section_id] = cv.oof
         X_test[section_id] = cv.pred
+    return X, X_test
 
-    print(X.shape, X, 'second layer start')
 
-    for name, params in second_layer.items():
-        algo_name, section_id = name.split('_')
-        # eval_metrics = [get_eval_metric(metric)
-        #                 for metric in params['EVAL_METRICS']]
-        eval_metrics = {metric: get_eval_metric(metric)
-                        for metric in params['EVAL_METRICS']}
+def train():
+    # initialize
+    folder_path = f'models/{settings.PROJECT_ID}'
+    provide_dir(folder_path)
+    cv_summary = pd.DataFrame()
 
-        n_splits = params['CV']['n_splits']
-        seed = params['CV']['seed']
+    # loading data
+    X, y = load_train()
+    X_test, id_test = load_test()
 
-        kf = get_split(algo_name, n_splits, seed)
-        cv = CrossValidator(get_model(algo_name, params['PARAMS']), kf)
-        cv.run(
-            X, y, X_test, id_test,
-            eval_metrics=eval_metrics,
-            prediction=params['PREDICT_FORMAT'],
-            train_params={
-                'cat_features': {},
-                'fit_params': params['FIT_PARAMS']
-            },
-            verbose=1
-        )
-        models_path = f'models/{settings.PROJECT_ID}/{section_id}.pkl'
-        cv.save(models_path)
-        cv_scores_path = f'models/{settings.PROJECT_ID}/{section_id}.csv'
-        cv.scores.to_csv(cv_scores_path, encoding='utf-8')
-        for metric in eval_metrics.keys():
-            cv_summary.loc[section_id, metric] = cv.scores.loc[metric, 'mean']
+    # first layer
+    first_layer = settings.FIRST_LAYER
+    cv_summary = train_by_layer(
+        first_layer, X, y, X_test, id_test, cv_summary)
+
+    # second layer
+    second_layer = settings.SECOND_LAYER
+    X, X_test = get_oof_by_layer(first_layer)
+    cv_summary = train_by_layer(
+        second_layer, X, y, X_test, id_test, cv_summary)
+
     path = f'models/{settings.PROJECT_ID}/summary.csv'
     cv_summary.to_csv(path, encoding='utf-8')
