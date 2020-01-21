@@ -84,7 +84,7 @@ def get_eval_metric(name):
     return eval_metrics[name]
 
 
-def train_by_layer(layer, X, y, X_test, id_test, cv_summary):
+def train_by_layer(layer, X, y, X_test, id_test, cv_summary, folder_path):
     for name, params in layer.items():
         if params['PREPROCESS']:
             preprocess = params['PREPROCESS']
@@ -111,13 +111,23 @@ def train_by_layer(layer, X, y, X_test, id_test, cv_summary):
             },
             verbose=1
         )
-        models_path = f'models/{settings.PROJECT_ID}/{section_id}.pkl'
+        models_path = f'{folder_path}/{section_id}.pkl'
         cv.save(models_path)
-        cv_scores_path = f'models/{settings.PROJECT_ID}/{section_id}.csv'
+        cv_scores_path = f'{folder_path}/{section_id}.csv'
         cv.scores.to_csv(cv_scores_path, encoding='utf-8')
+
+        # feature importance
+        image_path = f'{folder_path}/{section_id}.png'
+        columns = X.columns.values
+        cv.save_feature_importances(columns, image_path)
+
         for metric in eval_metrics.keys():
             mean = cv.scores.loc[metric, 'mean']
-            cv_summary.loc[section_id, metric] = f'{mean:.5f}'
+            se = cv.scores.loc[metric, 'se']
+            ci = cv.scores.loc[metric, 'ci']
+            cv_summary.loc[section_id, f'{metric}_mean'] = f'{mean:.5f}'
+            cv_summary.loc[section_id, f'{metric}_se'] = f'{se:.5f}'
+            cv_summary.loc[section_id, f'{metric}_ci'] = f'{ci:.5f}'
     return cv_summary
 
 
@@ -144,13 +154,27 @@ def train():
     # first layer
     first_layer = settings.FIRST_LAYER
     cv_summary = train_by_layer(
-        first_layer, X, y, X_test, id_test, cv_summary)
+        first_layer, X, y, X_test, id_test, cv_summary, folder_path)
 
     # second layer
     second_layer = settings.SECOND_LAYER
     X, X_test = get_oof_by_layer(first_layer)
     cv_summary = train_by_layer(
-        second_layer, X, y, X_test, id_test, cv_summary)
+        second_layer, X, y, X_test, id_test, cv_summary, folder_path)
 
-    path = f'models/{settings.PROJECT_ID}/summary.csv'
+    path = f'{folder_path}/summary.csv'
     cv_summary.to_csv(path, encoding='utf-8')
+
+    # 5分割ぐらいでやっても、ほとんどエラーバーで覆い尽くされて意味ない
+    # ここ、お試しでやっているので要リファクタ
+    import matplotlib.pyplot as plt
+    import numpy as np
+    columns = cv_summary.index.values
+    for metric in ['R2', 'RMSE']:
+        plt.figure(figsize=(5, -(-len(columns) // 3)))
+        mean = cv_summary.loc[:, f'{metric}_mean']
+        se = cv_summary.loc[:, f'{metric}_se']
+        order = np.argsort(mean)
+        plt.barh(np.array(columns)[order],
+                 mean[order], xerr=se[order])
+        plt.savefig(f'{folder_path}/summary-{metric}.png')

@@ -60,10 +60,13 @@ class Trainer:
     def get_feature_importances(self):
         if self.model_type in [
             'CatBoostRegressor', 'CatBoostClassifier',
-            'LGBMRegressor', 'LGBMClassifier',
+            # 'LGBMRegressor', 'LGBMClassifier',
             'RandomForestRegressor', 'RandomForestClassifier'
         ]:
             return self.model.feature_importances_
+        elif self.model_type in ['LGBMRegressor', 'LGBMClassifier']:
+            return self.model.booster_.feature_importance(
+                importance_type='gain')
         elif self.model_type in ['LinearRegression', 'LogisticRegression',
                                  'Ridge', 'Lasso']:
             return self.model.coef_
@@ -198,12 +201,14 @@ class CrossValidator:
 
         self.scores['mean'], self.scores['sd'] = self.scores.mean(
             axis=1), self.scores.std(axis=1, ddof=0)
+        self.scores['se'] = self.scores['sd'] / np.sqrt(K)
+        self.scores['ci'] = self.scores['se'] * 1.96
 
         log_str = f'[CV] Overall:'
         for key in eval_metrics.keys():
             mean = self.scores.loc[key, 'mean']
             sd = self.scores.loc[key, 'sd']
-            log_str += f' {key}={mean:.5f}　({sd:.5f})'
+            log_str += f' {key}={mean:.5f} (SD={sd:.5f})'
         print(log_str)
 
     def plot_feature_importances(self, columns):
@@ -216,12 +221,18 @@ class CrossValidator:
         plt.show()
 
     def save_feature_importances(self, columns, path):
-        plt.figure(figsize=(5, int(len(columns) / 3)))
+        plt.figure(figsize=(5, -(-len(columns) // 3)))
         imps_mean = np.mean(self.imps, axis=1)
+        # imps_sd = np.std(self.imps, axis=1, ddof=0)
         imps_se = np.std(self.imps, axis=1) / np.sqrt(self.imps.shape[0])
+        # imps_ci = np.std(self.imps, axis=1) / \
+        #     np.sqrt(self.imps.shape[0]) * 1.96
         order = np.argsort(imps_mean)
+        # order = order[-np.count_nonzero(imps_mean == 0):]
         plt.barh(np.array(columns)[order],
                  imps_mean[order], xerr=imps_se[order])
+        # plt.xlabel('')
+        # plt.ylabel('')
         plt.savefig(path)
 
     def save(self, path):
