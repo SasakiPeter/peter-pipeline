@@ -1,10 +1,9 @@
-import numpy as np
 import pandas as pd
 
 from sklearn.model_selection import StratifiedKFold, KFold
 from sklearn.metrics import (
     roc_auc_score, log_loss,
-    r2_score, mean_squared_error
+    r2_score
 )
 from sklearn.linear_model import (
     LinearRegression, LogisticRegression, Ridge, Lasso)
@@ -15,8 +14,10 @@ from lightgbm import LGBMClassifier, LGBMRegressor
 
 from pipeline.conf import settings
 from pipeline.preprocess import load_train, load_test, label_encoding
-from pipeline.train.utils import CrossValidator
+from pipeline.train.base import CrossValidator
+from pipeline.train.utils import get_cvs_by_layer
 from pipeline.utils.directory import provide_dir
+from pipeline.utils.metrics import rmse
 
 
 def get_preprocess(name):
@@ -73,10 +74,6 @@ def get_model(name, params):
     return models[name](**params)
 
 
-def rmse(y_true, y_pred):
-    return np.sqrt(mean_squared_error(y_true, y_pred))
-
-
 def get_eval_metric(name):
     eval_metrics = {
         'RMSE': rmse,
@@ -127,11 +124,8 @@ def train_by_layer(layer, X, y, X_test, id_test, cv_summary):
 def get_oof_by_layer(layer):
     X = pd.DataFrame()
     X_test = pd.DataFrame()
-    for i, (name, params) in enumerate(layer.items()):
-        algo_name, section_id = name.split('_')
-        model_path = f'models/{settings.PROJECT_ID}/{section_id}.pkl'
-        cv = CrossValidator()
-        cv.load(model_path)
+    cvs = get_cvs_by_layer(layer)
+    for section_id, cv in cvs.items():
         X[section_id] = cv.oof
         X_test[section_id] = cv.pred
     return X, X_test

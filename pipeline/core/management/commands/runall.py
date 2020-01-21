@@ -1,6 +1,6 @@
 from pipeline.core.management.base import BaseCommand
 from pipeline.train import train
-from pipeline.predict import make_submit_file
+from pipeline.predict import predict
 
 
 class Command(BaseCommand):
@@ -16,4 +16,4 @@ class Command(BaseCommand):
 
     def execute(self, *args, **options):
         train()
-        make_submit_file()
+        predict()
