@@ -1,4 +1,4 @@
-PROJECT_ID = '4'
+PROJECT_ID = '5'
 
 
 # Data source definition
@@ -7,9 +7,12 @@ DATA_PATH = {
     'test': 'data/test.csv'
 }
 
+# semi target っていうかtarget複数設定して、それぞれの
+# 学習器に応じて、切り替えられるように実装したい
 DATA_FORMAT = {
     'id': 'ID',
-    'target': 'y'
+    'target': 'y',
+    # 'not_X':
 }
 
 CAT_IDXS = [0, 1, 2, 3, 4, 5, 6, 7]
@@ -26,6 +29,7 @@ N_LAYERS = 2
 
 FIRST_LAYER = {
     'LGBMRegressor_LGB1': {
+        'PREPROCESS': ['LabelEncoding'],
         'CV': {
             'n_splits': 5,
             'seed': 1
@@ -61,7 +65,7 @@ FIRST_LAYER = {
             'n_estimators': 1000,
         },
         'FIT_PARAMS': {
-            'early_stopping_rounds': 10,
+            'early_stopping_rounds': 300,
         },
         'EVAL_METRICS': [
             'RMSE',
@@ -70,6 +74,7 @@ FIRST_LAYER = {
         'PREDICT_FORMAT': 'predict'
     },
     'CatBoostRegressor_CTB1': {
+        'PREPROCESS': [],
         'CV': {
             'n_splits': 5,
             'seed': 1
@@ -102,7 +107,7 @@ FIRST_LAYER = {
             'iterations': 1000,
         },
         'FIT_PARAMS': {
-            'early_stopping_rounds': 10,
+            'early_stopping_rounds': 300,
         },
         'EVAL_METRICS': [
             'RMSE',
@@ -111,6 +116,7 @@ FIRST_LAYER = {
         'PREDICT_FORMAT': 'predict'
     },
     'CatBoostRegressor_CTB2': {
+        'PREPROCESS': [],
         'CV': {
             'n_splits': 5,
             'seed': 1
@@ -143,7 +149,7 @@ FIRST_LAYER = {
             'iterations': 1000,
         },
         'FIT_PARAMS': {
-            'early_stopping_rounds': 10,
+            'early_stopping_rounds': 300,
         },
         'EVAL_METRICS': [
             'RMSE',
@@ -152,6 +158,7 @@ FIRST_LAYER = {
         'PREDICT_FORMAT': 'predict'
     },
     'RandomForestRegressor_RF1': {
+        'PREPROCESS': [],
         'CV': {
             'n_splits': 5,
             'seed': 1
@@ -175,7 +182,7 @@ FIRST_LAYER = {
 }
 
 SECOND_LAYER = {
-    'LinearRegression': {
+    'LinearRegression_STACKING1': {
         'CV': {
             'n_splits': 5,
             'seed': 10
@@ -191,43 +198,23 @@ SECOND_LAYER = {
             'R2'
         ],
         'PREDICT_FORMAT': 'predict'
-    }
+    },
+    'Ridge_STACKING2': {
+        'CV': {
+            'n_splits': 5,
+            'seed': 10
+        },
+        'PARAMS': {
+            'alpha': 1.0,
+            'random_state': 1
+        },
+        'FIT_PARAMS': {
+
+        },
+        'EVAL_METRICS': [
+            'RMSE',
+            'R2'
+        ],
+        'PREDICT_FORMAT': 'predict'
+    },
 }
-
-# LGB_PARAMS = {
-#     "hoge": "fuga",
-# }
-
-# CAT_PARAMS = {
-#     'loss_function': 'RMSE',
-#     'eval_metric': 'R2',
-#     # 'loss_function': 'Logloss',
-#     # 'eval_metric': 'AUC',
-#     'random_seed': 608,
-#     'learning_rate': 0.03,
-
-#     'bootstrap_type': 'Bayesian',
-#     'sampling_frequency': 'PerTreeLevel',
-#     'sampling_unit': 'Object',
-
-#     # up to 16
-#     'depth': 4,
-#     # try diff value
-#     # 'l2_leaf_reg': 2,
-#     # 'random_strength': 1,
-#     # 'bagging_temperature': 0,
-#     'border_count': 254,
-
-#     # golden feature
-#     # 'per_float_feature_quantization': '0:border_count=1024'
-
-#     'grow_policy': 'SymmetricTree',
-#     'nan_mode': 'Forbidden',
-#     # 陽性の重みを増やす
-#     # 'scale_pos_weight': 9,
-#     'iterations': 1000,
-# }
-
-# CAT_FIT_PARAMS = {
-#     'early_stopping_rounds': 10,
-# }

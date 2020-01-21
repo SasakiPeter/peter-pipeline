@@ -43,8 +43,12 @@ class Trainer:
             if cat_features is None:
                 cat_features = []
             print(cat_features)
+            print(self.model)
+            print(X.shape)
+            # print(X[0])
             self.model.fit(X, y, eval_set=[(X, y), (X_valid, y_valid)],
-                           categorical_feature=cat_features, **fit_params)
+                           #    categorical_feature=cat_features,
+                           **fit_params)
             self.best_iteration = self.model.best_iteration_
         else:
             # カテゴリ変数あるやつを、LinearRegressionにかけたら、バグりそう
@@ -123,6 +127,8 @@ class CrossValidator:
             eval_metrics=None, prediction='predict',
             transform=None, train_params={}, verbose=True):
 
+        assert isinstance(X, pd.core.frame.DataFrame)
+
         if not isinstance(eval_metrics, (list, tuple, set)):
             eval_metrics = [eval_metrics]
 
@@ -143,11 +149,17 @@ class CrossValidator:
                 self.datasplit.split(X, y, group)):
 
             # numpy 想定の記述
-            x_train, x_valid = X[train_idx], X[valid_idx]
+            # x_train, x_valid = X[train_idx], X[valid_idx]
+            # y_train, y_valid = y[train_idx], y[valid_idx]
+
+            # pandas 想定の記述
+            x_train, x_valid = X.iloc[train_idx, :], X.iloc[valid_idx, :]
             y_train, y_valid = y[train_idx], y[valid_idx]
+
             if X_test is not None:
                 x_test = X_test.copy()
 
+            # foldごとに特徴量を作り直す、すなわち、target encoding用
             if transform is not None:
                 x_train, x_valid, y_train, y_valid, x_test = transform(
                     Xs=(x_train, x_valid), ys=(y_train, y_valid),

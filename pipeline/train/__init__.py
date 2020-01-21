@@ -1,4 +1,5 @@
 import numpy as np
+import pandas as pd
 
 from sklearn.model_selection import StratifiedKFold, KFold
 from sklearn.metrics import (
@@ -13,8 +14,15 @@ from catboost import CatBoostClassifier, CatBoostRegressor
 from lightgbm import LGBMClassifier, LGBMRegressor
 
 from pipeline.conf import settings
-from pipeline.preprocess import load_train, load_test
+from pipeline.preprocess import load_train, load_test, label_encoding
 from pipeline.train.utils import CrossValidator
+
+
+def get_preprocess(name):
+    preprocesses = {
+        'LabelEncoding': label_encoding
+    }
+    return preprocesses[name]
 
 
 def get_split(algo, n_splits, seed):
@@ -79,14 +87,19 @@ def get_eval_metric(name):
 
 
 def train():
-    # Trainer が　pandas で動くように要修正
     X, y = load_train()
     X_test, id_test = load_test()
-    X, y, X_test, id_test = X.values, y.values, X_test.values, id_test.values
+    # X, y, X_test, id_test = X.values, y.values, X_test.values, id_test.values
 
     first_layer = settings.FIRST_LAYER
 
     for name, params in first_layer.items():
+        if params['PREPROCESS']:
+            preprocess = params['PREPROCESS']
+            preprocess_funcs = [get_preprocess(name) for name in preprocess]
+            for f in preprocess_funcs:
+                X, X_test = f(X, X_test)
+
         algo_name, section_id = name.split('_')
         eval_metrics = [get_eval_metric(metric)
                         for metric in params['EVAL_METRICS']]
@@ -112,21 +125,25 @@ def train():
     # stacking layers
     second_layer = settings.SECOND_LAYER
 
-    X = np.zeros((X.shape[0], len(first_layer)))
-    X_test = np.zeros((X.shape[0], len(first_layer)))
+    # X = np.zeros((X.shape[0], len(first_layer)))
+    # X_test = np.zeros((X.shape[0], len(first_layer)))
+    X = pd.DataFrame()
+    X_test = pd.DataFrame()
 
     for i, (name, params) in enumerate(first_layer.items()):
         algo_name, section_id = name.split('_')
         model_path = f'models/{settings.PROJECT_ID}-{section_id}.pkl'
         cv = CrossValidator()
         cv.load(model_path)
-        X[:, i] = cv.oof
-        X_test[:, i] = cv.pred
+        X[section_id] = cv.oof
+        X_test[section_id] = cv.pred
+        # X[:, i] = cv.oof
+        # X_test[:, i] = cv.pred
 
     print(X.shape, X, 'second layer start')
 
     for name, params in second_layer.items():
-        algo_name = name
+        algo_name, section_id = name.split('_')
         eval_metrics = [get_eval_metric(metric)
                         for metric in params['EVAL_METRICS']]
 
@@ -145,6 +162,6 @@ def train():
             },
             verbose=1
         )
-        # models_path = f'models/{settings.PROJECT_ID}-{section_id}.pkl'
-        models_path = f'models/{settings.PROJECT_ID}.pkl'
+        models_path = f'models/{settings.PROJECT_ID}-{section_id}.pkl'
+        # models_path = f'models/{settings.PROJECT_ID}.pkl'
         cv.save(models_path)
