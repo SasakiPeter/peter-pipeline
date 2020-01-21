@@ -16,6 +16,7 @@ from lightgbm import LGBMClassifier, LGBMRegressor
 from pipeline.conf import settings
 from pipeline.preprocess import load_train, load_test, label_encoding
 from pipeline.train.utils import CrossValidator
+from pipeline.utils.directory import provide_dir
 
 
 def get_preprocess(name):
@@ -87,9 +88,12 @@ def get_eval_metric(name):
 
 
 def train():
+    folder_path = f'models/{settings.PROJECT_ID}'
+    provide_dir(folder_path)
+    cv_summary = pd.DataFrame()
+
     X, y = load_train()
     X_test, id_test = load_test()
-    # X, y, X_test, id_test = X.values, y.values, X_test.values, id_test.values
 
     first_layer = settings.FIRST_LAYER
 
@@ -101,8 +105,8 @@ def train():
                 X, X_test = f(X, X_test)
 
         algo_name, section_id = name.split('_')
-        eval_metrics = [get_eval_metric(metric)
-                        for metric in params['EVAL_METRICS']]
+        eval_metrics = {metric: get_eval_metric(metric)
+                        for metric in params['EVAL_METRICS']}
 
         n_splits = params['CV']['n_splits']
         seed = params['CV']['seed']
@@ -119,14 +123,16 @@ def train():
             },
             verbose=1
         )
-        models_path = f'models/{settings.PROJECT_ID}-{section_id}.pkl'
+        models_path = f'models/{settings.PROJECT_ID}/{section_id}.pkl'
         cv.save(models_path)
+        cv_scores_path = f'models/{settings.PROJECT_ID}/{section_id}.csv'
+        cv.scores.to_csv(cv_scores_path, encoding='utf-8')
+        for metric in eval_metrics.keys():
+            cv_summary.loc[section_id, metric] = cv.scores.loc[metric, 'mean']
 
     # stacking layers
     second_layer = settings.SECOND_LAYER
 
-    # X = np.zeros((X.shape[0], len(first_layer)))
-    # X_test = np.zeros((X.shape[0], len(first_layer)))
     X = pd.DataFrame()
     X_test = pd.DataFrame()
 
@@ -137,15 +143,15 @@ def train():
         cv.load(model_path)
         X[section_id] = cv.oof
         X_test[section_id] = cv.pred
-        # X[:, i] = cv.oof
-        # X_test[:, i] = cv.pred
 
     print(X.shape, X, 'second layer start')
 
     for name, params in second_layer.items():
         algo_name, section_id = name.split('_')
-        eval_metrics = [get_eval_metric(metric)
-                        for metric in params['EVAL_METRICS']]
+        # eval_metrics = [get_eval_metric(metric)
+        #                 for metric in params['EVAL_METRICS']]
+        eval_metrics = {metric: get_eval_metric(metric)
+                        for metric in params['EVAL_METRICS']}
 
         n_splits = params['CV']['n_splits']
         seed = params['CV']['seed']
@@ -162,6 +168,11 @@ def train():
             },
             verbose=1
         )
-        models_path = f'models/{settings.PROJECT_ID}-{section_id}.pkl'
-        # models_path = f'models/{settings.PROJECT_ID}.pkl'
+        models_path = f'models/{settings.PROJECT_ID}/{section_id}.pkl'
         cv.save(models_path)
+        cv_scores_path = f'models/{settings.PROJECT_ID}/{section_id}.csv'
+        cv.scores.to_csv(cv_scores_path, encoding='utf-8')
+        for metric in eval_metrics.keys():
+            cv_summary.loc[section_id, metric] = cv.scores.loc[metric, 'mean']
+    path = f'models/{settings.PROJECT_ID}/summary.csv'
+    cv_summary.to_csv(path, encoding='utf-8')

@@ -42,10 +42,6 @@ class Trainer:
         elif self.model_type[:4] == 'LGBM':
             if cat_features is None:
                 cat_features = []
-            print(cat_features)
-            print(self.model)
-            print(X.shape)
-            # print(X[0])
             self.model.fit(X, y, eval_set=[(X, y), (X_valid, y_valid)],
                            #    categorical_feature=cat_features,
                            **fit_params)
@@ -121,6 +117,7 @@ class CrossValidator:
         self.pred = None
         self.imps = None
         self.id_test = None
+        self.scores = None
 
     def run(self, X, y, X_test=None, id_test=None,
             group=None, n_splits=None,
@@ -128,9 +125,6 @@ class CrossValidator:
             transform=None, train_params={}, verbose=True):
 
         assert isinstance(X, pd.core.frame.DataFrame)
-
-        if not isinstance(eval_metrics, (list, tuple, set)):
-            eval_metrics = [eval_metrics]
 
         if n_splits is None:
             K = self.datasplit.get_n_splits()
@@ -141,18 +135,13 @@ class CrossValidator:
             self.pred = np.zeros(len(X_test), dtype=np.float)
 
         self.imps = np.zeros((X.shape[1], K))
-        self.scores = np.zeros((len(eval_metrics), K))
+        self.scores = pd.DataFrame()
 
         self.id_test = id_test
 
         for fold_i, (train_idx, valid_idx) in enumerate(
                 self.datasplit.split(X, y, group)):
 
-            # numpy 想定の記述
-            # x_train, x_valid = X[train_idx], X[valid_idx]
-            # y_train, y_valid = y[train_idx], y[valid_idx]
-
-            # pandas 想定の記述
             x_train, x_valid = X.iloc[train_idx, :], X.iloc[valid_idx, :]
             y_train, y_valid = y[train_idx], y[valid_idx]
 
@@ -195,26 +184,26 @@ class CrossValidator:
 
             self.imps[:, fold_i] = model.get_feature_importances()
 
-            for i, metric in enumerate(eval_metrics):
+            for eval_name, metric in eval_metrics.items():
                 score = metric(y_valid, self.oof[valid_idx])
-                self.scores[i, fold_i] = score
+                self.scores.loc[eval_name, fold_i] = score
 
             if verbose >= 0:
-                log_str = f'[CV] Fold {fold_i}:'
+                log_str = f'[CV] Fold {fold_i+1}:'
                 log_str += ''.join(
-                    [f' m{i}={self.scores[i, fold_i]:.5f}'
-                     for i in range(len(eval_metrics))])
+                    [f' {key}={self.scores.loc[key, fold_i]:.5f}'
+                     for key in eval_metrics.keys()])
                 log_str += f' (iter {model.get_best_iteration()})'
                 print(log_str)
 
-        # ？
+        self.scores['mean'], self.scores['sd'] = self.scores.mean(
+            axis=1), self.scores.std(axis=1, ddof=0)
+
         log_str = f'[CV] Overall:'
-        log_str += ''.join(
-            [f' m{i}={me:.5f}±{se:.5f}' for i, (me, se) in enumerate(zip(
-                np.mean(self.scores, axis=1),
-                np.std(self.scores, axis=1)/np.sqrt(len(eval_metrics))
-            ))]
-        )
+        for key in eval_metrics.keys():
+            mean = self.scores.loc[key, 'mean']
+            sd = self.scores.loc[key, 'sd']
+            log_str += f' {key}={mean:.5f}　({sd:.5f})'
         print(log_str)
 
     def plot_feature_importances(self, columns):
@@ -237,8 +226,8 @@ class CrossValidator:
 
     def save(self, path):
         objects = [
-            self.basemodel, self.datasplit,
-            self.models, self.oof, self.pred, self.imps, self.id_test
+            self.basemodel, self.datasplit, self.models,
+            self.oof, self.pred, self.imps, self.id_test, self.scores
         ]
         with open(path, 'wb') as f:
             pickle.dump(objects, f)
@@ -247,7 +236,7 @@ class CrossValidator:
         with open(path, 'rb') as f:
             objects = pickle.load(f)
         self.basemodel, self.datasplit, self.models, \
-            self.oof, self.pred, self.imps, self.id_test = objects
+            self.oof, self.pred, self.imps, self.id_test, self.scores = objects
 
     def save_prediction(self, path, ID='ID', y='y', header=True):
         df = pd.DataFrame()
