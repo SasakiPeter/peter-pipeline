@@ -4,6 +4,7 @@ import pickle
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
+from scipy.optimize import minimize
 from catboost import Pool
 
 
@@ -248,6 +249,59 @@ class CrossValidator:
             objects = pickle.load(f)
         self.basemodel, self.datasplit, self.models, \
             self.oof, self.pred, self.imps, self.id_test, self.scores = objects
+
+    def save_prediction(self, path, ID='ID', y='y', header=True):
+        df = pd.DataFrame()
+        df[ID] = self.id_test
+        df[y] = self.pred
+        df.to_csv(path, encoding='utf-8', index=False, header=header)
+
+
+def weighted_average(weight, matrix):
+    if np.count_nonzero(weight < 0) > 0:
+        return weight.dot(matrix) * 0
+    else:
+        return weight.dot(matrix)
+
+
+# これもK-foldすべき　もっというと、上に統合すべき
+class Blender:
+    """
+    train, get_weight, predictはTrainer
+    run, save_predictionはCrossValidatorに組み込む
+    """
+
+    def train(self, X, y, X_valid=None, y_valid=None,
+              eval_metric=None):
+        X_list = X.values.T
+
+        def objective(weight):
+            oof_blend = weighted_average(weight, X_list)
+            return eval_metric(y, oof_blend)
+
+        result = minimize(
+            objective,
+            x0=np.ones(len(X_list)) / len(X_list),
+            constraints=(
+                {'type': 'eq', 'fun': lambda x: 1 - x.sum()},
+            ),
+            method='Nelder-Mead'
+        )
+        self.weight = result.x
+
+    def get_weight(self):
+        return self.weight
+
+    def predict(self, X):
+        return weighted_average(self.weight, X.values.T)
+
+    def run(self,  X, y, X_test=None, id_test=None,
+            eval_metric=None):
+        self.id_test = id_test
+        self.train(X, y, eval_metric=eval_metric)
+        self.oof = self.predict(X)
+        self.pred = self.predict(X_test)
+        self.score = eval_metric(y, self.oof)
 
     def save_prediction(self, path, ID='ID', y='y', header=True):
         df = pd.DataFrame()

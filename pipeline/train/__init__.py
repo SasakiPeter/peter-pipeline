@@ -14,7 +14,7 @@ from lightgbm import LGBMClassifier, LGBMRegressor
 
 from pipeline.conf import settings
 from pipeline.preprocess import load_train, load_test, label_encoding
-from pipeline.train.base import CrossValidator
+from pipeline.train.base import CrossValidator, Blender
 from pipeline.train.utils import get_cvs_by_layer
 from pipeline.utils.directory import provide_dir
 from pipeline.utils.metrics import rmse
@@ -155,6 +155,15 @@ def train():
     first_layer = settings.FIRST_LAYER
     cv_summary = train_by_layer(
         first_layer, X, y, X_test, id_test, cv_summary, folder_path)
+
+    # Trainer, CrossValidatorに組み込む予定
+    blender = Blender()
+    blender.run(X, y, X_test, id_test, eval_metric=rmse)
+
+    path = f'{folder_path}/blend.csv'
+    blender.save_prediction(path)
+    with open(f'{folder_path}/blend.txt', 'w') as f:
+        f.write(f'{blender.score}')
 
     # second layer
     second_layer = settings.SECOND_LAYER

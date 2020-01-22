@@ -219,4 +219,23 @@ SECOND_LAYER = {
         ],
         'PREDICT_FORMAT': 'predict'
     },
+    # 'Blender_BLD2': {
+    #     'PREPROCESS': [],
+    #     'CV': {
+    #         'n_splits': 5,
+    #         'seed': 10
+    #     },
+    #     'PARAMS': {
+    #         'objective': 'rmse',
+    #         'random_state': 1
+    #     },
+    #     'FIT_PARAMS': {
+
+    #     },
+    #     'EVAL_METRICS': [
+    #         'RMSE',
+    #         'R2'
+    #     ],
+    #     'PREDICT_FORMAT': 'predict'
+    # },
 }
