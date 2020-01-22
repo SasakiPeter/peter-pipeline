@@ -14,7 +14,8 @@ from lightgbm import LGBMClassifier, LGBMRegressor
 
 from pipeline.conf import settings
 from pipeline.preprocess import load_train, load_test, label_encoding
-from pipeline.train.base import CrossValidator, Blender
+from pipeline.train.base import CrossValidator
+# from pipeline.train.base import CrossValidator, Blender
 from pipeline.train.utils import get_cvs_by_layer
 from pipeline.utils.directory import provide_dir
 from pipeline.utils.metrics import rmse
@@ -123,9 +124,11 @@ def train_by_layer(layer, X, y, X_test, id_test, cv_summary, folder_path):
 
         for metric in eval_metrics.keys():
             mean = cv.scores.loc[metric, 'mean']
+            sd = cv.scores.loc[metric, 'sd']
             se = cv.scores.loc[metric, 'se']
             ci = cv.scores.loc[metric, 'ci']
             cv_summary.loc[section_id, f'{metric}_mean'] = f'{mean:.5f}'
+            cv_summary.loc[section_id, f'{metric}_sd'] = f'{sd:.5f}'
             cv_summary.loc[section_id, f'{metric}_se'] = f'{se:.5f}'
             cv_summary.loc[section_id, f'{metric}_ci'] = f'{ci:.5f}'
     return cv_summary
@@ -156,15 +159,6 @@ def train():
     cv_summary = train_by_layer(
         first_layer, X, y, X_test, id_test, cv_summary, folder_path)
 
-    # Trainer, CrossValidatorに組み込む予定
-    blender = Blender()
-    blender.run(X, y, X_test, id_test, eval_metric=rmse)
-
-    path = f'{folder_path}/blend.csv'
-    blender.save_prediction(path)
-    with open(f'{folder_path}/blend.txt', 'w') as f:
-        f.write(f'{blender.score}')
-
     # second layer
     second_layer = settings.SECOND_LAYER
     X, X_test = get_oof_by_layer(first_layer)
@@ -174,16 +168,25 @@ def train():
     path = f'{folder_path}/summary.csv'
     cv_summary.to_csv(path, encoding='utf-8')
 
-    # 5分割ぐらいでやっても、ほとんどエラーバーで覆い尽くされて意味ない
-    # ここ、お試しでやっているので要リファクタ
+    # X, X_test間違っているから、うまくいかないはず
+    # Trainer, CrossValidatorに組み込む予定
+    # blender = Blender()
+    # blender.run(X, y, X_test, id_test, eval_metric=rmse)
+
+    # path = f'{folder_path}/blend.csv'
+    # blender.save_prediction(path)
+    # with open(f'{folder_path}/blend.txt', 'w') as f:
+    #     f.write(f'{blender.score}')
+
     import matplotlib.pyplot as plt
     import numpy as np
     columns = cv_summary.index.values
     for metric in ['R2', 'RMSE']:
         plt.figure(figsize=(5, -(-len(columns) // 3)))
         mean = cv_summary.loc[:, f'{metric}_mean']
-        se = cv_summary.loc[:, f'{metric}_se']
+        sd = cv_summary.loc[:, f'{metric}_sd']
         order = np.argsort(mean)
         plt.barh(np.array(columns)[order],
-                 mean[order], xerr=se[order])
+                 mean[order], xerr=sd[order])
+        plt.xlabel('This error bar is SD')
         plt.savefig(f'{folder_path}/summary-{metric}.png')

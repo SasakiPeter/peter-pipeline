@@ -224,15 +224,15 @@ class CrossValidator:
     def save_feature_importances(self, columns, path):
         plt.figure(figsize=(5, -(-len(columns) // 3)))
         imps_mean = np.mean(self.imps, axis=1)
-        # imps_sd = np.std(self.imps, axis=1, ddof=0)
-        imps_se = np.std(self.imps, axis=1) / np.sqrt(self.imps.shape[0])
+        imps_sd = np.std(self.imps, axis=1, ddof=0)
+        # imps_se = np.std(self.imps, axis=1) / np.sqrt(self.imps.shape[0])
         # imps_ci = np.std(self.imps, axis=1) / \
         #     np.sqrt(self.imps.shape[0]) * 1.96
         order = np.argsort(imps_mean)
         # order = order[-np.count_nonzero(imps_mean == 0):]
         plt.barh(np.array(columns)[order],
-                 imps_mean[order], xerr=imps_se[order])
-        # plt.xlabel('')
+                 imps_mean[order], xerr=imps_sd[order])
+        plt.xlabel('This error bar is SD')
         # plt.ylabel('')
         plt.savefig(path)
 
